@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { eq } from 'drizzle-orm';
 import * as schema from '../src/lib/server/db/schema.js';
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -15,8 +16,8 @@ const db = drizzle(client, { schema });
 async function seed() {
 	console.log('Seeding database...');
 
-	// Insert test hotel
-	const [hotel] = await db
+	// Insert test hotel (or find existing)
+	let [hotel] = await db
 		.insert(schema.hotels)
 		.values({
 			name: 'Hotel Špindlerův Mlýn',
@@ -26,39 +27,64 @@ async function seed() {
 		.returning();
 
 	if (!hotel) {
-		console.log('Hotel already exists, skipping seed.');
-		await client.end();
-		return;
+		hotel = (await db.query.hotels.findFirst({
+			where: eq(schema.hotels.slug, 'spindleruv-mlyn')
+		}))!;
+		console.log(`Hotel already exists: ${hotel.name} (${hotel.id})`);
+	} else {
+		console.log(`Created hotel: ${hotel.name} (${hotel.id})`);
 	}
 
-	console.log(`Created hotel: ${hotel.name} (${hotel.id})`);
-
-	// Insert hotel settings
-	await db.insert(schema.hotelSettings).values({
-		hotelId: hotel.id,
-		theme: 'dark',
-		slideshowSpeedSeconds: 15,
-		language: 'en',
-		resortAliases: ['medvedin', 'svpetr'],
-		enabledModules: ['weather', 'lifts', 'slopes', 'webcams'],
-		dataProvider: 'holidayinfo',
-		providerConfig: {},
-		customBranding: {}
+	// Insert hotel settings (skip if exists)
+	const existingSettings = await db.query.hotelSettings.findFirst({
+		where: eq(schema.hotelSettings.hotelId, hotel.id)
 	});
+	if (!existingSettings) {
+		await db.insert(schema.hotelSettings).values({
+			hotelId: hotel.id,
+			theme: 'dark',
+			slideshowSpeedSeconds: 15,
+			language: 'en',
+			resortAliases: ['medvedin', 'svpetr'],
+			enabledModules: ['weather', 'lifts', 'slopes', 'webcams'],
+			dataProvider: 'holidayinfo',
+			providerConfig: {},
+			customBranding: {}
+		});
+		console.log('Created hotel settings');
+	}
 
-	console.log('Created hotel settings');
-
-	// Insert test device with a known token
+	// Insert test device with a known token (skip if exists)
 	const testToken = 'TEST-ABCD';
-	await db.insert(schema.devices).values({
-		token: testToken,
-		hotelId: hotel.id,
-		deviceName: 'Lobby TV'
+	const existingDevice = await db.query.devices.findFirst({
+		where: eq(schema.devices.token, testToken)
 	});
+	if (!existingDevice) {
+		await db.insert(schema.devices).values({
+			token: testToken,
+			hotelId: hotel.id,
+			deviceName: 'Lobby TV'
+		});
+		console.log(`Created test device with token: ${testToken}`);
+	}
 
-	console.log(`Created test device with token: ${testToken}`);
+	// Link a Supabase auth user to the hotel (pass USER_ID env var)
+	const userId = process.env.USER_ID;
+	if (userId) {
+		await db
+			.insert(schema.hotelUsers)
+			.values({
+				hotelId: hotel.id,
+				userId,
+				role: 'admin'
+			})
+			.onConflictDoNothing();
+		console.log(`Linked user ${userId} to hotel as admin`);
+	} else {
+		console.log('Tip: pass USER_ID=<supabase-user-uuid> to link an admin user');
+	}
+
 	console.log('Seed complete!');
-
 	await client.end();
 }
 
