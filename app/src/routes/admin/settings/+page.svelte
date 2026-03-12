@@ -9,9 +9,19 @@
 	let language = $state('en');
 	let aliasesText = $state('');
 	let enabledModules = $state<string[]>([]);
-	let weatherDestinations = $state<Array<{ name: string; lat: string; lon: string }>>([]);
+	let weatherDestinations = $state<Array<{ name: string; lat: number; lon: number }>>([]);
 	let qrCodes = $state<Array<{ label: string; url: string }>>([]);
 	let initialized = $state(false);
+
+	// City search state
+	let cityQuery = $state('');
+	let cityResults = $state<Array<{ name: string; country: string; state?: string; lat: number; lon: number }>>([]);
+	let searchingCity = $state(false);
+	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	// Drag & drop state for modules
+	let dragIndex = $state<number | null>(null);
+	let dragOverIndex = $state<number | null>(null);
 
 	$effect(() => {
 		if (settings && !initialized) {
@@ -21,7 +31,7 @@
 			aliasesText = (settings.resortAliases ?? []).join(', ');
 			enabledModules = settings.enabledModules ?? [];
 			const wd = (settings.weatherDestinations ?? []) as Array<{ name: string; lat: number; lon: number }>;
-			weatherDestinations = wd.map((d) => ({ name: d.name, lat: String(d.lat), lon: String(d.lon) }));
+			weatherDestinations = wd.map((d) => ({ ...d }));
 			const qr = (settings.qrCodes ?? []) as Array<{ label: string; url: string }>;
 			qrCodes = qr.map((q) => ({ ...q }));
 			initialized = true;
@@ -32,16 +42,16 @@
 	let saved = $state(false);
 	let errorMsg = $state('');
 
-	const allModules = [
-		{ value: 'weather', label: 'Ski Weather' },
-		{ value: 'lifts', label: 'Lifts' },
-		{ value: 'slopes', label: 'Slopes' },
-		{ value: 'webcams', label: 'Webcams' },
-		{ value: 'services', label: 'Hotel Services' },
-		{ value: 'announcements', label: 'Announcements' },
-		{ value: 'generalWeather', label: 'General Weather' },
-		{ value: 'qrCodes', label: 'QR Codes' }
-	];
+	const allModules: Record<string, string> = {
+		weather: 'Ski Weather',
+		lifts: 'Lifts',
+		slopes: 'Slopes',
+		webcams: 'Webcams',
+		services: 'Hotel Services',
+		announcements: 'Announcements',
+		generalWeather: 'General Weather',
+		qrCodes: 'QR Codes'
+	};
 
 	const themes = ['dark', 'light', 'alpine', 'luxury'];
 	const languages = [
@@ -59,9 +69,63 @@
 		}
 	}
 
-	function addWeatherDest() {
+	// Drag & drop handlers
+	function handleDragStart(index: number) {
+		dragIndex = index;
+	}
+
+	function handleDragOver(e: DragEvent, index: number) {
+		e.preventDefault();
+		dragOverIndex = index;
+	}
+
+	function handleDragLeave() {
+		dragOverIndex = null;
+	}
+
+	function handleDrop(targetIndex: number) {
+		if (dragIndex === null || dragIndex === targetIndex) {
+			dragIndex = null;
+			dragOverIndex = null;
+			return;
+		}
+		const items = [...enabledModules];
+		const [moved] = items.splice(dragIndex, 1);
+		items.splice(targetIndex, 0, moved);
+		enabledModules = items;
+		dragIndex = null;
+		dragOverIndex = null;
+	}
+
+	function handleDragEnd() {
+		dragIndex = null;
+		dragOverIndex = null;
+	}
+
+	// City search
+	function handleCityInput() {
+		if (searchTimeout) clearTimeout(searchTimeout);
+		cityResults = [];
+		if (cityQuery.length < 2) return;
+		searchingCity = true;
+		searchTimeout = setTimeout(async () => {
+			try {
+				const resp = await fetch(`/api/admin/weather-search?q=${encodeURIComponent(cityQuery)}`);
+				if (resp.ok) {
+					cityResults = await resp.json();
+				}
+			} finally {
+				searchingCity = false;
+			}
+		}, 400);
+	}
+
+	function selectCity(city: { name: string; country: string; state?: string; lat: number; lon: number }) {
 		if (weatherDestinations.length >= 5) return;
-		weatherDestinations = [...weatherDestinations, { name: '', lat: '', lon: '' }];
+		const label = city.state ? `${city.name}, ${city.state}, ${city.country}` : `${city.name}, ${city.country}`;
+		weatherDestinations = [...weatherDestinations, { name: label, lat: city.lat, lon: city.lon }];
+		cityQuery = '';
+		cityResults = [];
 	}
 
 	function removeWeatherDest(index: number) {
@@ -87,10 +151,6 @@
 			.map((a) => a.trim())
 			.filter(Boolean);
 
-		const wd = weatherDestinations
-			.filter((d) => d.name && d.lat && d.lon)
-			.map((d) => ({ name: d.name, lat: parseFloat(d.lat), lon: parseFloat(d.lon) }));
-
 		const qr = qrCodes.filter((q) => q.label && q.url);
 
 		try {
@@ -103,7 +163,7 @@
 					language,
 					resortAliases: aliases,
 					enabledModules,
-					weatherDestinations: wd,
+					weatherDestinations,
 					qrCodes: qr
 				})
 			});
@@ -180,19 +240,46 @@
 
 		<section class="settings-section">
 			<h2>Modules</h2>
-			<p class="hint">Enable the modules you want to show on the display. Manage content for Services and Announcements on their own pages.</p>
-			<div class="module-toggles">
-				{#each allModules as mod}
+			<p class="hint">Toggle modules on/off. Drag enabled modules to reorder their slideshow sequence.</p>
+
+			<div class="module-checkboxes">
+				{#each Object.entries(allModules) as [value, label]}
 					<label class="toggle">
 						<input
 							type="checkbox"
-							checked={enabledModules.includes(mod.value)}
-							onchange={() => toggleModule(mod.value)}
+							checked={enabledModules.includes(value)}
+							onchange={() => toggleModule(value)}
 						/>
-						<span>{mod.label}</span>
+						<span>{label}</span>
 					</label>
 				{/each}
 			</div>
+
+			{#if enabledModules.length > 1}
+				<div class="module-order">
+					<span class="order-label">Slideshow order:</span>
+					<div class="order-list" role="list">
+						{#each enabledModules as mod, i}
+							<div
+								class="order-item"
+								class:dragging={dragIndex === i}
+								class:drop-above={dragOverIndex === i && dragIndex !== null && dragIndex > i}
+								class:drop-below={dragOverIndex === i && dragIndex !== null && dragIndex < i}
+								role="listitem"
+								draggable="true"
+								ondragstart={() => handleDragStart(i)}
+								ondragover={(e) => handleDragOver(e, i)}
+								ondragleave={handleDragLeave}
+								ondrop={() => handleDrop(i)}
+								ondragend={handleDragEnd}
+							>
+								<span class="drag-handle">⠿</span>
+								<span>{allModules[mod] ?? mod}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		</section>
 
 		<section class="settings-section">
@@ -209,17 +296,41 @@
 
 		<section class="settings-section">
 			<h2>General Weather Destinations</h2>
-			<p class="hint">Add cities to show current weather conditions. Use latitude/longitude coordinates (e.g. Google Maps). Max 5.</p>
+			<p class="hint">Search for cities to show current weather conditions on the display. Max 5.</p>
+
 			{#each weatherDestinations as dest, i}
-				<div class="dest-row">
-					<input type="text" bind:value={dest.name} placeholder="City name" class="dest-name" />
-					<input type="text" bind:value={dest.lat} placeholder="Latitude" class="dest-coord" />
-					<input type="text" bind:value={dest.lon} placeholder="Longitude" class="dest-coord" />
+				<div class="dest-chip">
+					<span>{dest.name}</span>
+					<span class="dest-coords">({dest.lat}, {dest.lon})</span>
 					<button class="btn-remove" onclick={() => removeWeatherDest(i)} aria-label="Remove">&#x2715;</button>
 				</div>
 			{/each}
+
 			{#if weatherDestinations.length < 5}
-				<button class="btn-add" onclick={addWeatherDest}>+ Add destination</button>
+				<div class="city-search">
+					<input
+						type="text"
+						bind:value={cityQuery}
+						oninput={handleCityInput}
+						placeholder="Search city name..."
+						class="city-input"
+					/>
+					{#if searchingCity}
+						<div class="search-status">Searching...</div>
+					{/if}
+					{#if cityResults.length > 0}
+						<div class="search-results">
+							{#each cityResults as city}
+								<button class="search-result" onclick={() => selectCity(city)}>
+									<span class="result-name">{city.name}</span>
+									{#if city.state}<span class="result-detail">{city.state},</span>{/if}
+									<span class="result-detail">{city.country}</span>
+									<span class="result-coords">({city.lat}, {city.lon})</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
 			{/if}
 		</section>
 
@@ -353,10 +464,12 @@
 		background: #1e3a5f;
 	}
 
-	.module-toggles {
+	/* Module checkboxes */
+	.module-checkboxes {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 12px;
+		margin-bottom: 16px;
 	}
 
 	.toggle {
@@ -376,13 +489,137 @@
 		height: 16px;
 	}
 
+	/* Drag & drop module ordering */
+	.module-order {
+		border-top: 1px solid #334155;
+		padding-top: 16px;
+	}
+
+	.order-label {
+		display: block;
+		color: #94a3b8;
+		font-size: 0.85rem;
+		margin-bottom: 8px;
+	}
+
+	.order-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.order-item {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 14px;
+		background: #0f172a;
+		border: 2px solid transparent;
+		border-radius: 8px;
+		font-size: 0.9rem;
+		cursor: grab;
+		transition: background 0.15s, border-color 0.15s, transform 0.15s;
+		user-select: none;
+	}
+
+	.order-item:active { cursor: grabbing; }
+
+	.order-item.dragging {
+		opacity: 0.4;
+	}
+
+	.order-item.drop-above {
+		border-top-color: #3b82f6;
+		transform: translateY(2px);
+	}
+
+	.order-item.drop-below {
+		border-bottom-color: #3b82f6;
+		transform: translateY(-2px);
+	}
+
+	.drag-handle {
+		color: #64748b;
+		font-size: 1.1rem;
+		line-height: 1;
+	}
+
 	.hint {
 		color: #64748b;
 		font-size: 0.8rem;
 		margin: 0 0 12px;
 	}
 
-	/* Weather destinations & QR code rows */
+	/* Weather city search */
+	.dest-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 8px;
+		margin: 0 8px 8px 0;
+		font-size: 0.9rem;
+	}
+
+	.dest-coords {
+		color: #64748b;
+		font-size: 0.8rem;
+	}
+
+	.city-search {
+		position: relative;
+		margin-top: 8px;
+	}
+
+	.city-input {
+		max-width: 400px !important;
+	}
+
+	.search-status {
+		color: #64748b;
+		font-size: 0.8rem;
+		margin-top: 4px;
+	}
+
+	.search-results {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		width: 400px;
+		background: #1e293b;
+		border: 1px solid #334155;
+		border-radius: 8px;
+		margin-top: 4px;
+		overflow: hidden;
+		z-index: 10;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+	}
+
+	.search-result {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		padding: 10px 14px;
+		background: none;
+		border: none;
+		border-top: 1px solid #334155;
+		color: #f1f5f9;
+		font-size: 0.9rem;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.search-result:first-child { border-top: none; }
+	.search-result:hover { background: #334155; }
+
+	.result-name { font-weight: 600; }
+	.result-detail { color: #94a3b8; }
+	.result-coords { color: #64748b; font-size: 0.8rem; margin-left: auto; }
+
+	/* QR code rows */
 	.dest-row {
 		display: flex;
 		gap: 8px;
@@ -392,10 +629,6 @@
 
 	.dest-name {
 		max-width: 180px !important;
-	}
-
-	.dest-coord {
-		max-width: 120px !important;
 	}
 
 	.qr-url {
