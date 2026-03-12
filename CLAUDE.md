@@ -36,6 +36,10 @@ npm run db:seed      # Seed test data (USER_ID=<uuid> to link admin)
 
 ## Git Workflow
 
+### Commit Cadence
+
+When tackling multiple separate tasks at once, try to isolate them and commit each task / part on its own to make the git history more granular and readable.
+
 ### Commit Messages
 
 **ALWAYS use Gitmoji** for commit messages in this repository. Examples:

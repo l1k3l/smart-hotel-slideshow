@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, beforeNavigate } from '$app/navigation';
+	import { onMount } from 'svelte';
 
 	let { data } = $props();
 	let settings = $derived(data.settings);
@@ -12,6 +13,15 @@
 	let weatherDestinations = $state<Array<{ name: string; lat: number; lon: number }>>([]);
 	let qrCodes = $state<Array<{ label: string; url: string }>>([]);
 	let initialized = $state(false);
+
+	// Snapshot of saved state for dirty tracking
+	let savedSnapshot = $state('');
+
+	function currentSnapshot(): string {
+		return JSON.stringify({ theme, speed, language, aliasesText, enabledModules, weatherDestinations, qrCodes });
+	}
+
+	let isDirty = $derived(initialized && currentSnapshot() !== savedSnapshot);
 
 	// City search state
 	let cityQuery = $state('');
@@ -35,7 +45,29 @@
 			const qr = (settings.qrCodes ?? []) as Array<{ label: string; url: string }>;
 			qrCodes = qr.map((q) => ({ ...q }));
 			initialized = true;
+			// Take snapshot after a tick so $state settles
+			queueMicrotask(() => {
+				savedSnapshot = currentSnapshot();
+			});
 		}
+	});
+
+	// Warn on SvelteKit navigation
+	beforeNavigate(({ cancel }) => {
+		if (isDirty && !confirm('You have unsaved changes. Leave this page?')) {
+			cancel();
+		}
+	});
+
+	// Warn on browser tab close / external navigation
+	onMount(() => {
+		function handleBeforeUnload(e: BeforeUnloadEvent) {
+			if (isDirty) {
+				e.preventDefault();
+			}
+		}
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
 	});
 
 	let saving = $state(false);
@@ -174,6 +206,7 @@
 			}
 
 			saved = true;
+			savedSnapshot = currentSnapshot();
 			initialized = false;
 			await invalidateAll();
 			setTimeout(() => (saved = false), 3000);
@@ -191,8 +224,9 @@
 
 <div class="header-row">
 	<h1>Settings</h1>
-	<button class="btn-primary" onclick={handleSave} disabled={saving}>
+	<button class="btn-primary" class:has-changes={isDirty} onclick={handleSave} disabled={saving}>
 		{saving ? 'Saving...' : 'Save Changes'}
+		{#if isDirty}<span class="unsaved-dot"></span>{/if}
 	</button>
 </div>
 
@@ -382,6 +416,27 @@
 
 	.btn-primary:hover:not(:disabled) { background: #2563eb; }
 	.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+	.btn-primary.has-changes {
+		position: relative;
+		animation: pulse-glow 2s ease-in-out infinite;
+	}
+
+	.unsaved-dot {
+		position: absolute;
+		top: -4px;
+		right: -4px;
+		width: 10px;
+		height: 10px;
+		background: #f59e0b;
+		border-radius: 50%;
+		border: 2px solid #0f172a;
+	}
+
+	@keyframes pulse-glow {
+		0%, 100% { box-shadow: none; }
+		50% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.5); }
+	}
 
 	.toast {
 		padding: 12px 16px;

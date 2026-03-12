@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import ImageUpload from '$lib/components/ImageUpload.svelte';
 
 	let { data } = $props();
 
@@ -106,10 +107,10 @@
 				<span>Message</span>
 				<textarea bind:value={formBody} rows="4" placeholder="The pool will be closed for maintenance..."></textarea>
 			</label>
-			<label class="field">
-				<span>Image URL (optional)</span>
-				<input type="text" bind:value={formImageUrl} placeholder="https://..." />
-			</label>
+			<div class="field">
+				<span>Image (optional)</span>
+				<ImageUpload value={formImageUrl} onchange={(url) => formImageUrl = url} />
+			</div>
 			<div class="field-row">
 				<label class="field">
 					<span>Show from (optional)</span>

@@ -60,7 +60,8 @@
 
 	.admin-layout {
 		display: flex;
-		min-height: 100vh;
+		height: 100vh;
+		overflow: hidden;
 	}
 
 	.sidebar {
@@ -70,6 +71,7 @@
 		flex-direction: column;
 		flex-shrink: 0;
 		border-right: 1px solid #334155;
+		overflow-y: auto;
 	}
 
 	.sidebar-header {
