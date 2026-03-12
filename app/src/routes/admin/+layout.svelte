@@ -16,6 +16,8 @@
 	const navItems = [
 		{ href: '/admin', label: 'Dashboard' },
 		{ href: '/admin/devices', label: 'Devices' },
+		{ href: '/admin/services', label: 'Services' },
+		{ href: '/admin/announcements', label: 'Announcements' },
 		{ href: '/admin/settings', label: 'Settings' },
 		{ href: '/admin/preview', label: 'Preview' }
 	];

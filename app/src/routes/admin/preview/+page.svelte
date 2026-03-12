@@ -1,6 +1,5 @@
 <script lang="ts">
 	import DisplayShell from '$lib/display/DisplayShell.svelte';
-	import type { ModuleName } from '$lib/display/types';
 
 	let { data } = $props();
 </script>
@@ -15,14 +14,7 @@
 {#if data.config}
 	<div class="preview-container">
 		<div class="preview-frame">
-			<DisplayShell
-				hotelName={data.config.hotelName}
-				theme={data.config.theme}
-				modules={data.config.enabledModules as ModuleName[]}
-				data={data.config.resortData}
-				speedSeconds={data.config.slideshowSpeedSeconds}
-				customBranding={data.config.customBranding}
-			/>
+			<DisplayShell config={data.config} />
 		</div>
 	</div>
 {:else}

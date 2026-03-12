@@ -15,6 +15,13 @@
       "when": 1773351385035,
       "tag": "0001_melted_harpoon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773352873602,
+      "tag": "0002_faulty_thing",
+      "breakpoints": true
     }
   ]
 }

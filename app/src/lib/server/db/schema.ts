@@ -27,9 +27,41 @@ export const hotelSettings = pgTable('hotel_settings', {
 		.default(['weather', 'lifts', 'slopes', 'webcams']),
 	dataProvider: text('data_provider').notNull().default('holidayinfo'),
 	providerConfig: jsonb('provider_config').notNull().default({}),
+	weatherDestinations: jsonb('weather_destinations').notNull().default([]),
+	qrCodes: jsonb('qr_codes').notNull().default([]),
 	customBranding: jsonb('custom_branding').notNull().default({}),
 	createdAt: timestamptz('created_at').notNull().defaultNow(),
 	updatedAt: timestamptz('updated_at').notNull().defaultNow()
+});
+
+export const hotelServices = pgTable('hotel_services', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	hotelId: uuid('hotel_id')
+		.notNull()
+		.references(() => hotels.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	category: text('category').notNull().default('other'),
+	description: text('description').notNull().default(''),
+	hours: text('hours').notNull().default(''),
+	imageUrl: text('image_url'),
+	sortOrder: integer('sort_order').notNull().default(0),
+	isActive: boolean('is_active').notNull().default(true),
+	createdAt: timestamptz('created_at').notNull().defaultNow()
+});
+
+export const announcements = pgTable('announcements', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	hotelId: uuid('hotel_id')
+		.notNull()
+		.references(() => hotels.id, { onDelete: 'cascade' }),
+	title: text('title').notNull(),
+	body: text('body').notNull().default(''),
+	imageUrl: text('image_url'),
+	showFrom: timestamptz('show_from'),
+	showUntil: timestamptz('show_until'),
+	priority: integer('priority').notNull().default(0),
+	isActive: boolean('is_active').notNull().default(true),
+	createdAt: timestamptz('created_at').notNull().defaultNow()
 });
 
 export const devices = pgTable('devices', {

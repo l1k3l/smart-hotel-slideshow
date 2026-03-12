@@ -38,6 +38,8 @@ export const PUT: RequestHandler = async ({ request, locals: { safeGetSession } 
 	if (typeof body.language === 'string') updates.language = body.language;
 	if (Array.isArray(body.resortAliases)) updates.resortAliases = body.resortAliases;
 	if (Array.isArray(body.enabledModules)) updates.enabledModules = body.enabledModules;
+	if (Array.isArray(body.weatherDestinations)) updates.weatherDestinations = body.weatherDestinations;
+	if (Array.isArray(body.qrCodes)) updates.qrCodes = body.qrCodes;
 
 	if (Object.keys(updates).length === 0) {
 		return error(400, 'No valid fields to update');

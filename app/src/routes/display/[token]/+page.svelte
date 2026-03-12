@@ -168,14 +168,7 @@
 		<p class="error-hint">Check the device token or contact support.</p>
 	</div>
 {:else if config}
-	<DisplayShell
-		hotelName={config.hotelName}
-		theme={config.theme}
-		modules={config.enabledModules}
-		data={config.resortData}
-		speedSeconds={config.slideshowSpeedSeconds}
-		customBranding={config.customBranding}
-	/>
+	<DisplayShell {config} />
 {/if}
 
 <style>

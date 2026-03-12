@@ -1,24 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { ResortData } from '$lib/types';
-	import type { ModuleName } from './types';
+	import type { DisplayConfig } from './types';
 	import { getThemeVars, themeToStyle } from './themes';
 	import SlideShowEngine from './SlideShowEngine.svelte';
 
 	let {
-		hotelName,
-		theme = 'dark',
-		modules,
-		data,
-		speedSeconds = 15,
-		customBranding = {}
+		config
 	}: {
-		hotelName: string;
-		theme?: string;
-		modules: ModuleName[];
-		data: ResortData;
-		speedSeconds?: number;
-		customBranding?: Record<string, unknown>;
+		config: DisplayConfig;
 	} = $props();
 
 	let clock = $state('');
@@ -32,21 +21,21 @@
 		return () => clearInterval(interval);
 	});
 
-	let themeStyle = $derived(themeToStyle(getThemeVars(theme)));
+	let themeStyle = $derived(themeToStyle(getThemeVars(config.theme)));
 </script>
 
 <div class="display-shell" style={themeStyle}>
 	<header class="display-header">
-		<h1 class="hotel-name">{hotelName}</h1>
+		<h1 class="hotel-name">{config.hotelName}</h1>
 		<span class="clock">{clock}</span>
 	</header>
 
 	<div class="display-content">
-		<SlideShowEngine {modules} {data} {speedSeconds} />
+		<SlideShowEngine modules={config.enabledModules} {config} speedSeconds={config.slideshowSpeedSeconds} />
 	</div>
 
 	<footer class="display-footer">
-		<span class="data-time">Data: {new Date(data.fetchedAt).toLocaleTimeString()}</span>
+		<span class="data-time">Data: {new Date(config.resortData.fetchedAt).toLocaleTimeString()}</span>
 	</footer>
 </div>
 

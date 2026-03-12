@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { ResortData } from '$lib/types';
-	import type { ModuleName } from './types';
+	import type { ModuleName, DisplayConfig } from './types';
 	import { moduleComponents, getModuleProps } from './modules/index';
 
 	let {
 		modules,
-		data,
+		config,
 		speedSeconds = 15
 	}: {
 		modules: ModuleName[];
-		data: ResortData;
+		config: DisplayConfig;
 		speedSeconds?: number;
 	} = $props();
 
@@ -33,7 +32,7 @@
 
 	let currentModule = $derived(modules[currentIndex]);
 	let CurrentComponent = $derived(moduleComponents[currentModule]);
-	let currentProps = $derived(getModuleProps(currentModule, data));
+	let currentProps = $derived(getModuleProps(currentModule, config));
 </script>
 
 <div class="slideshow" class:visible>
