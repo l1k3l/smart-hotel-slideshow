@@ -34,6 +34,22 @@ npm run db:seed      # Seed test data (USER_ID=<uuid> to link admin)
 - Server-only code goes under `src/lib/server/` (SvelteKit enforces this boundary)
 - Canonical data types in `src/lib/types.ts` are the contract between providers and display modules — don't put provider-specific types there
 
+## Git Workflow
+
+### Commit Messages
+
+**ALWAYS use Gitmoji** for commit messages in this repository. Examples:
+- 🎨 `:art:` - Improve structure/format of the code
+- ✨ `:sparkles:` - Introduce new features
+- 🐛 `:bug:` - Fix a bug
+- 📝 `:memo:` - Add or update documentation
+- ♻️ `:recycle:` - Refactor code
+- ✅ `:white_check_mark:` - Add or update tests
+- 🔧 `:wrench:` - Add or update configuration files / small general changes
+- 🛠️ `:wrench:` - Larger general changes
+- 🚀 `:rocket:` - Deploy stuff
+- 🧹 `:broom:` - Clean up code
+
 ## Context Documentation
 
 The codebase has `*_CONTEXT.md` files in key subfolders that document files, design decisions, and architecture. These are for developer orientation:

@@ -1,0 +1,1 @@
+ALTER TABLE "hotels" ADD COLUMN "max_devices" integer DEFAULT 5 NOT NULL;

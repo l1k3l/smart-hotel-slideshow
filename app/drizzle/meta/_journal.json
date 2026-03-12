@@ -8,6 +8,13 @@
       "when": 1773268924568,
       "tag": "0000_lonely_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773351385035,
+      "tag": "0001_melted_harpoon",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ export const hotels = pgTable('hotels', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	name: text('name').notNull(),
 	slug: text('slug').unique().notNull(),
+	maxDevices: integer('max_devices').notNull().default(5),
 	createdAt: timestamptz('created_at').notNull().defaultNow(),
 	updatedAt: timestamptz('updated_at').notNull().defaultNow()
 });

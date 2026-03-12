@@ -5,8 +5,13 @@
 
 	let generating = $state(false);
 	let newToken = $state('');
-	let editingId = $state('');
+	let errorMessage = $state('');
+	let expandedId = $state('');
 	let editingName = $state('');
+
+	const BANNER_DURATION = 10_000;
+	let bannerVisible = $state(false);
+	let bannerTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const onlineThreshold = 2 * 60 * 1000;
 
@@ -15,14 +20,39 @@
 		return Date.now() - lastSeenAt.getTime() < onlineThreshold;
 	}
 
+	function displayUrl(token: string): string {
+		return `${data.origin}/display/${token}`;
+	}
+
+	function showBanner() {
+		if (bannerTimer) clearTimeout(bannerTimer);
+		bannerVisible = true;
+		bannerTimer = setTimeout(() => {
+			bannerVisible = false;
+			bannerTimer = null;
+		}, BANNER_DURATION);
+	}
+
+	function dismissBanner() {
+		if (bannerTimer) clearTimeout(bannerTimer);
+		bannerVisible = false;
+		bannerTimer = null;
+	}
+
 	async function generateToken() {
 		generating = true;
 		newToken = '';
+		errorMessage = '';
 		try {
 			const resp = await fetch('/api/admin/tokens/generate', { method: 'POST' });
-			if (!resp.ok) throw new Error('Failed to generate token');
+			if (!resp.ok) {
+				const body = await resp.json().catch(() => null);
+				errorMessage = body?.message ?? 'Failed to generate token';
+				return;
+			}
 			const result = await resp.json();
 			newToken = result.token;
+			showBanner();
 			await invalidateAll();
 		} finally {
 			generating = false;
@@ -46,12 +76,17 @@
 	async function deleteDevice(id: string) {
 		if (!confirm('Delete this device and its token?')) return;
 		await fetch(`/api/admin/devices/${id}`, { method: 'DELETE' });
+		if (expandedId === id) expandedId = '';
 		await invalidateAll();
 	}
 
-	function startRename(id: string, currentName: string) {
-		editingId = id;
-		editingName = currentName;
+	function toggleExpand(id: string, currentName: string) {
+		if (expandedId === id) {
+			expandedId = '';
+		} else {
+			expandedId = id;
+			editingName = currentName;
+		}
 	}
 
 	async function saveRename(id: string) {
@@ -60,12 +95,8 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ deviceName: editingName })
 		});
-		editingId = '';
+		expandedId = '';
 		await invalidateAll();
-	}
-
-	function cancelRename() {
-		editingId = '';
 	}
 </script>
 
@@ -80,11 +111,31 @@
 	</button>
 </div>
 
-{#if newToken}
+{#if bannerVisible && newToken}
 	<div class="new-token-banner">
-		<span>New token:</span>
-		<code>{newToken}</code>
-		<span class="hint">Use this at <code>/display/{newToken}</code></span>
+		<div class="banner-content">
+			<span>New token:</span>
+			<code class="token-highlight">{newToken}</code>
+			<a href={displayUrl(newToken)} class="url-link" target="_blank">{displayUrl(newToken)}</a>
+		</div>
+		<div class="banner-right">
+			<svg class="countdown-ring" viewBox="0 0 24 24" width="24" height="24">
+				<circle class="ring-bg" cx="12" cy="12" r="10" />
+				<circle
+					class="ring-fg"
+					cx="12" cy="12" r="10"
+					style="animation-duration: {BANNER_DURATION}ms"
+				/>
+			</svg>
+			<button class="btn-dismiss" onclick={dismissBanner} aria-label="Dismiss">&#x2715;</button>
+		</div>
+	</div>
+{/if}
+
+{#if errorMessage}
+	<div class="error-banner">
+		{errorMessage}
+		<button class="btn-dismiss" onclick={() => (errorMessage = '')} aria-label="Dismiss">&#x2715;</button>
 	</div>
 {/if}
 
@@ -106,36 +157,7 @@
 			<tbody>
 				{#each data.devices as device}
 					<tr class:inactive={!device.isActive}>
-						<td>
-							{#if editingId === device.id}
-								<form
-									class="rename-form"
-									onsubmit={(e) => {
-										e.preventDefault();
-										saveRename(device.id);
-									}}
-								>
-									<input
-										type="text"
-										bind:value={editingName}
-										class="rename-input"
-									/>
-									<button type="submit" class="btn-small">Save</button>
-									<button type="button" class="btn-small btn-ghost" onclick={cancelRename}
-										>Cancel</button
-									>
-								</form>
-							{:else}
-								<span
-									class="device-name"
-									role="button"
-									tabindex="0"
-									ondblclick={() => startRename(device.id, device.deviceName)}
-								>
-									{device.deviceName}
-								</span>
-							{/if}
-						</td>
+						<td>{device.deviceName}</td>
 						<td><code class="token">{device.token}</code></td>
 						<td>
 							{#if !device.isActive}
@@ -167,6 +189,12 @@
 						<td class="actions">
 							<button
 								class="btn-small"
+								onclick={() => toggleExpand(device.id, device.deviceName)}
+							>
+								Edit
+							</button>
+							<button
+								class="btn-small"
 								onclick={() => toggleActive(device.id, device.isActive)}
 							>
 								{device.isActive ? 'Disable' : 'Enable'}
@@ -181,6 +209,38 @@
 							</button>
 						</td>
 					</tr>
+					{#if expandedId === device.id}
+						<tr class="expanded-row">
+							<td colspan="6">
+								<div class="expand-panel">
+									<div class="expand-field">
+										<span class="field-label">Device Name</span>
+										<form
+											class="rename-form"
+											onsubmit={(e) => {
+												e.preventDefault();
+												saveRename(device.id);
+											}}
+										>
+											<input
+												type="text"
+												bind:value={editingName}
+												class="rename-input"
+												aria-label="Device name"
+											/>
+											<button type="submit" class="btn-small btn-save">Save</button>
+										</form>
+									</div>
+									<div class="expand-field">
+										<span class="field-label">Display URL</span>
+										<a href={displayUrl(device.token)} class="url-link" target="_blank">
+											{displayUrl(device.token)}
+										</a>
+									</div>
+								</div>
+							</td>
+						</tr>
+					{/if}
 				{/each}
 			</tbody>
 		</table>
@@ -220,6 +280,23 @@
 		cursor: not-allowed;
 	}
 
+	/* Error banner */
+	.error-banner {
+		background: #3a1a1a;
+		border: 1px solid #ef4444;
+		border-radius: 8px;
+		padding: 14px 20px;
+		margin-bottom: 24px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		color: #fca5a5;
+		font-size: 0.9rem;
+		animation: fadeIn 0.3s ease;
+	}
+
+	/* Token banner with countdown */
 	.new-token-banner {
 		background: #1a3a2a;
 		border: 1px solid #22c55e;
@@ -228,25 +305,91 @@
 		margin-bottom: 24px;
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: 12px;
-		flex-wrap: wrap;
+		animation: fadeIn 0.3s ease;
 	}
 
-	.new-token-banner code {
+	.banner-content {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		flex-wrap: wrap;
+		min-width: 0;
+	}
+
+	.token-highlight {
 		font-size: 1.2rem;
 		font-weight: 700;
 		color: #22c55e;
 	}
 
-	.hint {
-		color: #94a3b8;
-		font-size: 0.85rem;
+	.banner-right {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-shrink: 0;
 	}
 
-	.hint code {
-		font-size: 0.85rem;
-		font-weight: 400;
+	.btn-dismiss {
+		background: none;
+		border: none;
 		color: #94a3b8;
+		font-size: 1rem;
+		cursor: pointer;
+		padding: 4px;
+		line-height: 1;
+	}
+
+	.btn-dismiss:hover {
+		color: #f1f5f9;
+	}
+
+	/* Countdown ring */
+	.countdown-ring {
+		transform: rotate(-90deg);
+	}
+
+	.ring-bg {
+		fill: none;
+		stroke: #334155;
+		stroke-width: 2;
+	}
+
+	.ring-fg {
+		fill: none;
+		stroke: #22c55e;
+		stroke-width: 2;
+		stroke-dasharray: 62.83; /* 2 * PI * 10 */
+		stroke-dashoffset: 0;
+		stroke-linecap: round;
+		animation: countdown-stroke linear forwards;
+	}
+
+	@keyframes countdown-stroke {
+		from {
+			stroke-dashoffset: 0;
+		}
+		to {
+			stroke-dashoffset: 62.83;
+		}
+	}
+
+	@keyframes fadeIn {
+		from { opacity: 0; transform: translateY(-8px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	/* URL link */
+	.url-link {
+		color: #60a5fa;
+		font-size: 0.85rem;
+		text-decoration: none;
+		word-break: break-all;
+	}
+
+	.url-link:hover {
+		text-decoration: underline;
 	}
 
 	.empty {
@@ -293,26 +436,6 @@
 		background: #0f172a;
 		padding: 2px 8px;
 		border-radius: 4px;
-	}
-
-	.device-name {
-		cursor: pointer;
-	}
-
-	.rename-form {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-	}
-
-	.rename-input {
-		padding: 4px 8px;
-		background: #0f172a;
-		border: 1px solid #334155;
-		border-radius: 4px;
-		color: #f1f5f9;
-		font-size: 0.9rem;
-		width: 150px;
 	}
 
 	.badge {
@@ -373,9 +496,13 @@
 		background: #334155;
 	}
 
-	.btn-ghost {
-		border: none;
-		color: #94a3b8;
+	.btn-save {
+		border-color: #22c55e;
+		color: #22c55e;
+	}
+
+	.btn-save:hover {
+		background: #1a3a2a;
 	}
 
 	.btn-danger {
@@ -386,5 +513,52 @@
 	.btn-danger:hover {
 		background: #7f1d1d;
 		color: #fff;
+	}
+
+	/* Expanded edit row */
+	.expanded-row td {
+		background: #162032;
+		border-top: 1px dashed #334155;
+		padding: 16px 20px;
+	}
+
+	.expand-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.expand-field {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.expand-field .field-label {
+		font-size: 0.75rem;
+		color: #94a3b8;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.rename-form {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+	}
+
+	.rename-input {
+		padding: 6px 10px;
+		background: #0f172a;
+		border: 1px solid #334155;
+		border-radius: 6px;
+		color: #f1f5f9;
+		font-size: 0.9rem;
+		width: 240px;
+	}
+
+	.rename-input:focus {
+		outline: none;
+		border-color: #3b82f6;
 	}
 </style>
