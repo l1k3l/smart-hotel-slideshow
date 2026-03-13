@@ -2,12 +2,22 @@
 	import type { Webcam } from '$lib/types';
 
 	let { webcams }: { webcams: Webcam[] } = $props();
+
+	function bestVideo(cam: Webcam): string | null {
+		// Prefer the full-size MP4
+		const full = cam.videoFiles.find((v) => v.size.includes('full'));
+		if (full) return full.url;
+		// Fall back to any video file
+		if (cam.videoFiles.length > 0) return cam.videoFiles[0].url;
+		return cam.videoUrl;
+	}
 </script>
 
 <section class="module webcams-module">
 	<h2>Webcams</h2>
 	<div class="webcam-grid">
 		{#each webcams as cam}
+			{@const video = bestVideo(cam)}
 			<div class="webcam-card">
 				<div class="webcam-header">
 					<h3>{cam.name}</h3>
@@ -16,9 +26,21 @@
 						{cam.temperature != null ? ` · ${cam.temperature}°C` : ''}
 					</span>
 				</div>
-				{#if cam.imageUrl}
-					<img src={cam.imageUrl} alt={cam.name} loading="lazy" />
-				{/if}
+				<div class="webcam-media">
+					{#if video}
+						<!-- svelte-ignore a11y_media_has_caption -->
+						<video
+							src={video}
+							autoplay
+							loop
+							muted
+							playsinline
+							poster={cam.imageUrl || undefined}
+						></video>
+					{:else if cam.imageUrl}
+						<img src={cam.imageUrl} alt={cam.name} />
+					{/if}
+				</div>
 			</div>
 		{/each}
 	</div>
@@ -62,6 +84,12 @@
 		color: var(--text-muted);
 	}
 
+	.webcam-media {
+		position: relative;
+		background: #000;
+	}
+
+	.webcam-card video,
 	.webcam-card img {
 		width: 100%;
 		display: block;
