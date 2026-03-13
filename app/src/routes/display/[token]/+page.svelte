@@ -62,6 +62,21 @@
 		}
 	}
 
+	/** Preload all image URLs in config so they're cached before modules render */
+	function preloadImages(cfg: DisplayConfig) {
+		const urls: string[] = [];
+		for (const svc of cfg.services ?? []) {
+			if (svc.imageUrl) urls.push(svc.imageUrl);
+		}
+		for (const ann of cfg.announcements ?? []) {
+			if (ann.imageUrl) urls.push(ann.imageUrl);
+		}
+		for (const url of urls) {
+			const img = new Image();
+			img.src = url;
+		}
+	}
+
 	async function fetchConfig(): Promise<DisplayConfig | null> {
 		try {
 			const resp = await fetch(`/api/display/${token}`);
@@ -69,7 +84,9 @@
 				const data = await resp.json().catch(() => ({ message: `HTTP ${resp.status}` }));
 				throw new Error(data.message ?? `HTTP ${resp.status}`);
 			}
-			return await resp.json();
+			const cfg: DisplayConfig = await resp.json();
+			preloadImages(cfg);
+			return cfg;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to fetch config';
 			return null;
@@ -129,8 +146,8 @@
 			return;
 		}
 
-		// Start heartbeats
-		heartbeatInterval = setInterval(heartbeat, 60 * 1000);
+		// Start heartbeats (10s for fast config change detection)
+		heartbeatInterval = setInterval(heartbeat, 10 * 1000);
 
 		// Refresh data every 5 minutes
 		dataInterval = setInterval(async () => {

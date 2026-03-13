@@ -14,40 +14,50 @@
 	} = $props();
 
 	let currentIndex = $state(0);
-	let visible = $state(true);
 
 	onMount(() => {
 		if (modules.length <= 1) return;
 
 		const interval = setInterval(() => {
-			visible = false;
-			setTimeout(() => {
-				currentIndex = (currentIndex + 1) % modules.length;
-				visible = true;
-			}, 400);
+			currentIndex = (currentIndex + 1) % modules.length;
 		}, speedSeconds * 1000);
 
 		return () => clearInterval(interval);
 	});
-
-	let currentModule = $derived(modules[currentIndex]);
-	let CurrentComponent = $derived(moduleComponents[currentModule]);
-	let currentProps = $derived(getModuleProps(currentModule, config));
 </script>
 
-<div class="slideshow" class:visible>
-	{#key currentModule}
-		<CurrentComponent {...currentProps} />
-	{/key}
+<!--
+  All modules stay mounted so images/canvases persist in the DOM.
+  Only the active slide is visible; others are hidden offscreen with
+  visibility:hidden (preserves layout/images but doesn't paint).
+-->
+<div class="slideshow">
+	{#each modules as mod, i}
+		{@const Component = moduleComponents[mod]}
+		{@const props = getModuleProps(mod, config)}
+		<div class="slide" class:active={i === currentIndex}>
+			<Component {...props} />
+		</div>
+	{/each}
 </div>
 
 <style>
 	.slideshow {
-		opacity: 0;
-		transition: opacity 0.4s ease-in-out;
+		position: relative;
+		width: 100%;
+		height: 100%;
 	}
 
-	.slideshow.visible {
+	.slide {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		visibility: hidden;
+		transition: opacity 0.5s ease-in-out;
+	}
+
+	.slide.active {
 		opacity: 1;
+		visibility: visible;
 	}
 </style>
